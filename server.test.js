@@ -1,0 +1,25 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {spawn} from 'node:child_process';
+import {once} from 'node:events';
+import {mkdtemp,readFile,rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+test('create, list, edit and delete a local Markdown note',async t=>{
+ const dir=await mkdtemp(path.join(tmpdir(),'fieldnote-'));
+ const child=spawn(process.execPath,['server.js'],{env:{...process.env,OPENAI_API_KEY:'',PORT:'0',NOTES_DIR:dir}});
+ t.after(async()=>{const ended=once(child,'exit');child.kill();await ended;await rm(dir,{recursive:true,force:true})});
+ const [line]=await once(child.stdout,'data');
+ const base='http://127.0.0.1:'+line.toString().trim().split(' ').pop();
+ assert.match(await (await fetch(base)).text(),/Voice notebook/);
+ const url=base+'/api/notes',transcript='Completed five patches.\nFollow up tomorrow.';
+ const post=await fetch(url,{method:'POST',body:JSON.stringify({transcript})});
+ assert.equal(post.status,200);const n=await post.json();assert.equal(n.transcript,transcript);
+ assert.match(await readFile(path.join(dir,n.id+'.md'),'utf8'),/## Original transcript/);
+ assert.deepEqual(await (await fetch(url)).json(),[n]);
+ const item=url+'?id='+encodeURIComponent(n.id);
+ const edited=await (await fetch(item,{method:'PUT',body:JSON.stringify({title:'Patches',body:'## Follow-up\n\nCheck tomorrow.'})})).json();
+ assert.equal(edited.title,'Patches');assert.equal(edited.transcript,transcript);assert.equal(edited.created,n.created);
+ assert.equal((await fetch(item,{method:'DELETE'})).status,200);
+ assert.deepEqual(await (await fetch(url)).json(),[]);
+});
