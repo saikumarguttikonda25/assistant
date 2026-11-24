@@ -37,7 +37,7 @@ const server=http.createServer(async(req,res)=>{
  if(url.pathname==='/api/config')return send({ai:!!key});
  if(url.pathname==='/api/notes'&&req.method==='GET'){
  await fs.mkdir(root,{recursive:true});const files=await fs.readdir(root,{recursive:true});
- return send((await Promise.all(files.filter(f=>/^\d{4}\/\d{2}\/[a-f0-9-]{36}\.md$/.test(f)).map(f=>read(f.slice(0,-3))))).sort((a,b)=>b.created.localeCompare(a.created)));
+ return send((await Promise.all(files.map(f=>f.replaceAll('\\','/')).filter(f=>/^\d{4}\/\d{2}\/[a-f0-9-]{36}\.md$/.test(f)).map(f=>read(f.slice(0,-3))))).sort((a,b)=>b.created.localeCompare(a.created)));
  }
  if(url.pathname.startsWith('/api/')){
  let chunks=[],size=0;for await(const c of req){size+=c.length;if(size>24e6)throw fail('Recording is too large. Use a shorter recording.',413);chunks.push(c)}
